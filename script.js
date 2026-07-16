@@ -143,12 +143,11 @@
   function buildFilterButtons(sheetNames) {
     var select = document.getElementById('filterSelect');
     if (!select) return;
-    select.innerHTML = '<option value="all">All (' + allData.length + ')</option>';
+    select.innerHTML = '<option value="all">All Models</option>';
     sheetNames.forEach(function(name) {
-      var count = allData.filter(function(d) { return d._sheetName === name; }).length;
       var opt = document.createElement('option');
       opt.value = name;
-      opt.textContent = name + ' (' + count + ')';
+      opt.textContent = name;
       select.appendChild(opt);
     });
     select.addEventListener('change', function() {
