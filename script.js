@@ -2,9 +2,9 @@
   var BASE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsdWvigWU2h6_sdXOrNN4ndvKO5qAu1QBDGa3jt1ID2YE3gmJdEueosz146DdH99qv0zmrKcQr-gWP';
   var PUB_HTML_URL = BASE_URL + '/pubhtml';
 
-  var allData = {};
+  var allData = [];
   var sheetList = [];
-  var loadedCount = 0;
+  var currentFilter = 'all';
 
   var navbar = document.getElementById('navbar');
   var mobileToggle = document.getElementById('mobileToggle');
@@ -153,105 +153,79 @@
     });
   }
 
-  function showLoading(msg) {
-    loading.style.display = '';
-    stockTableWrapper.style.display = 'none';
-    noResults.style.display = 'none';
-    loading.innerHTML = '<div class="spinner"></div><p>' + msg + '</p>';
-  }
-
-  function hideLoading() {
-    loading.style.display = 'none';
+  function updateProgress(done, total) {
+    var pct = Math.round((done / total) * 100);
+    loading.innerHTML =
+      '<div class="spinner"></div>' +
+      '<p>กำลังโหลดข้อมูล... ' + done + '/' + total + '</p>' +
+      '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
   }
 
   async function init() {
     try {
-      showLoading('กำลังโหลดรายชื่อ...');
+      loading.style.display = '';
+      stockTableWrapper.style.display = 'none';
 
       sheetList = await discoverSheets();
       if (sheetList.length === 0) throw new Error('No sheets found');
 
-      buildDropdown(sheetList.map(function(s) { return s.name; }));
+      var total = sheetList.length;
+      var done = 0;
+      allData = [];
 
-      hideLoading();
-      stockTableWrapper.style.display = '';
+      updateProgress(0, total);
 
-      filterSelect.addEventListener('change', function() {
-        loadSelectedSheet();
+      var batchSize = 20;
+      for (var i = 0; i < total; i += batchSize) {
+        var batch = sheetList.slice(i, i + batchSize);
+        var results = await Promise.all(batch.map(function(s) {
+          return fetchSheetCSV(s).catch(function() { return []; });
+        }));
+        batch.forEach(function(s, idx) {
+          var rows = results[idx];
+          if (rows.length > 0 && rows.some(function(r) { return r['Serial Number']; })) {
+            allData = allData.concat(rows);
+          }
+        });
+        done = Math.min(i + batchSize, total);
+        updateProgress(done, total);
+      }
+
+      var sheetNames = [];
+      var seen = {};
+      allData.forEach(function(r) {
+        if (!seen[r._sheetName]) { seen[r._sheetName] = true; sheetNames.push(r._sheetName); }
       });
+
+      buildDropdown(sheetNames);
+      filterSelect.addEventListener('change', function() {
+        currentFilter = filterSelect.value;
+        renderTable();
+      });
+
+      loading.style.display = 'none';
+      stockTableWrapper.style.display = '';
+      renderTable();
     } catch (err) {
       console.error('Init error:', err);
       loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">ตรวจสอบว่ารันผ่าน HTTP Server (ไม่ใช่ file://)</p>';
     }
   }
 
-  async function loadSelectedSheet() {
-    var selected = filterSelect.value;
-
-    if (selected === 'all') {
-      await loadAllSheets();
-    } else {
-      var sheet = sheetList.find(function(s) { return s.name === selected; });
-      if (!sheet) return;
-
-      showLoading('กำลังโหลด ' + sheet.name + '...');
-      try {
-        var rows = await fetchSheetCSV(sheet);
-        allData = {};
-        allData[selected] = rows;
-        loadedCount = Object.keys(allData).reduce(function(sum, k) { return sum + allData[k].length; }, 0);
-        hideLoading();
-        renderTable();
-      } catch (err) {
-        console.error('Fetch error:', err);
-        loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p>';
-      }
-    }
-  }
-
-  async function loadAllSheets() {
-    showLoading('กำลังโหลดทั้งหมด (0/' + sheetList.length + ')...');
-    allData = {};
-    loadedCount = 0;
-
-    var batchSize = 5;
-    for (var i = 0; i < sheetList.length; i += batchSize) {
-      var batch = sheetList.slice(i, i + batchSize);
-      var results = await Promise.all(batch.map(function(s) {
-        return fetchSheetCSV(s).catch(function() { return []; });
-      }));
-      batch.forEach(function(s, idx) {
-        if (results[idx].length > 0) {
-          allData[s.name] = results[idx];
-        }
-      });
-      loadedCount = Object.keys(allData).reduce(function(sum, k) { return sum + allData[k].length; }, 0);
-      var done = Math.min(i + batchSize, sheetList.length);
-      loading.querySelector('p').textContent = 'กำลังโหลดทั้งหมด (' + done + '/' + sheetList.length + ')...';
-    }
-
-    hideLoading();
-    renderTable();
-  }
-
   function renderTable() {
     var search = searchInput.value.toLowerCase();
-    var rows = [];
+    var filtered = allData;
 
-    var selected = filterSelect.value;
-    if (selected === 'all') {
-      Object.keys(allData).forEach(function(k) { rows = rows.concat(allData[k]); });
-    } else if (allData[selected]) {
-      rows = allData[selected];
+    if (currentFilter !== 'all') {
+      filtered = filtered.filter(function(d) { return d._sheetName === currentFilter; });
     }
-
     if (search) {
-      rows = rows.filter(function(d) {
+      filtered = filtered.filter(function(d) {
         return Object.values(d).some(function(v) { return String(v).toLowerCase().includes(search); });
       });
     }
 
-    if (rows.length === 0) {
+    if (filtered.length === 0) {
       stockTableWrapper.style.display = 'none';
       noResults.style.display = '';
       return;
@@ -260,7 +234,7 @@
     noResults.style.display = 'none';
     stockTableWrapper.style.display = '';
 
-    stockTableBody.innerHTML = rows.map(function(row, idx) {
+    stockTableBody.innerHTML = filtered.map(function(row, idx) {
       var mac = row['LAN MAC Address'] || (row['LAN MAC Address + Wi-Fi'] || '').split('|')[0].replace('LAN: ', '').trim();
       var defect = row['ตำหนิ'] || '';
       var hasSpec = row['CPU'] || row['Ram'];
