@@ -57,12 +57,12 @@
 
     var headers;
     var format = 'dell';
-    if (headerCount === 12) {
-      headers = ['Timestamp','Owner','Computer Name','Manufacturer','Model','Serial Number','CPU','Ram','GPU','Storage','LAN MAC Address + Wi-Fi','ตำหนิ'];
-      format = 'dell';
-    } else if (rawHeaders[1] && rawHeaders[1].trim() === 'S/N') {
+    if (rawHeaders[1] && rawHeaders[1].trim() === 'S/N') {
       headers = rawHeaders.map(function(h) { return h.trim(); });
       format = 'hp';
+    } else if (headerCount === 12) {
+      headers = ['Timestamp','Owner','Computer Name','Manufacturer','Model','Serial Number','CPU','Ram','GPU','Storage','LAN MAC Address + Wi-Fi','ตำหนิ'];
+      format = 'dell';
     } else {
       headers = rawHeaders.map(function(h) { return h.trim(); });
     }
