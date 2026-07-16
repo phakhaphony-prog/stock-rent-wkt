@@ -183,8 +183,11 @@
         }));
         batch.forEach(function(s, idx) {
           var rows = results[idx];
-          if (rows.length > 0 && rows.some(function(r) { return r['Serial Number']; })) {
-            allData = allData.concat(rows);
+          if (rows.length > 0) {
+            var withSN = rows.filter(function(r) { return r['Serial Number'] && r['Serial Number'].trim(); });
+            if (withSN.length > 0) {
+              allData = allData.concat(withSN);
+            }
           }
         });
         done = Math.min(i + batchSize, total);
@@ -220,9 +223,11 @@
       filtered = filtered.filter(function(d) { return d._sheetName === currentFilter; });
     }
     if (search) {
-      filtered = filtered.filter(function(d) {
-        return Object.values(d).some(function(v) { return String(v).toLowerCase().includes(search); });
+      rows = rows.filter(function(d) {
+        return d['Serial Number'] && d['Serial Number'].trim() && Object.values(d).some(function(v) { return String(v).toLowerCase().includes(search); });
       });
+    } else {
+      rows = rows.filter(function(d) { return d['Serial Number'] && d['Serial Number'].trim(); });
     }
 
     if (filtered.length === 0) {
