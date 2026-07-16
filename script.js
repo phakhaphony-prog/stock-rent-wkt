@@ -171,8 +171,6 @@
 
       var sheetNames = sheets.map(function(s) { return s.name; });
 
-      document.getElementById('totalCount').textContent = allData.length;
-
       buildFilterButtons(sheetNames);
       renderTable();
       loading.style.display = 'none';
@@ -224,5 +222,4 @@
   }
 
   fetchAllData();
-  setInterval(fetchAllData, 30000);
 })();
