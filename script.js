@@ -2,8 +2,9 @@
   var BASE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsdWvigWU2h6_sdXOrNN4ndvKO5qAu1QBDGa3jt1ID2YE3gmJdEueosz146DdH99qv0zmrKcQr-gWP';
   var PUB_HTML_URL = BASE_URL + '/pubhtml';
 
-  var allData = [];
-  var currentFilter = 'all';
+  var allData = {};
+  var sheetList = [];
+  var loadedCount = 0;
 
   var navbar = document.getElementById('navbar');
   var mobileToggle = document.getElementById('mobileToggle');
@@ -13,6 +14,7 @@
   var stockTableBody = document.getElementById('stockTableBody');
   var searchInput = document.getElementById('searchInput');
   var noResults = document.getElementById('noResults');
+  var filterSelect = document.getElementById('filterSelect');
   var menuOpen = false;
 
   window.addEventListener('scroll', function() {
@@ -53,14 +55,13 @@
   function parseCSV(text) {
     var lines = text.trim().split('\n');
     var rawHeaders = lines[0].split(',');
-    var headerCount = rawHeaders.length;
 
     var headers;
     var format = 'dell';
     if (rawHeaders[1] && rawHeaders[1].trim() === 'S/N') {
       headers = ['No.', 'S/N', 'Spec', 'Quotation No.', 'Date Start', 'Expire Date', 'Company', 'ตำหนิ', 'อ้างอิง'];
       format = 'hp';
-    } else if (headerCount === 12) {
+    } else if (rawHeaders.length === 12) {
       headers = ['Timestamp','Owner','Computer Name','Manufacturer','Model','Serial Number','CPU','Ram','GPU','Storage','LAN MAC Address + Wi-Fi','ตำหนิ'];
       format = 'dell';
     } else {
@@ -106,7 +107,7 @@
         if (!row['ตำหนิ']) row['ตำหนิ'] = '';
       }
 
-      if (format === 'dell' && headerCount === 12 && row['LAN MAC Address + Wi-Fi']) {
+      if (format === 'dell' && rawHeaders.length === 12 && row['LAN MAC Address + Wi-Fi']) {
         var combined = row['LAN MAC Address + Wi-Fi'];
         var parts = combined.split('|');
         row['LAN MAC Address'] = (parts[0] || '').replace('LAN: ', '').trim();
@@ -142,60 +143,115 @@
     return rows;
   }
 
-  function buildFilterButtons(sheetNames) {
-    var select = document.getElementById('filterSelect');
-    if (!select) return;
-    select.innerHTML = '<option value="all">All Models</option>';
+  function buildDropdown(sheetNames) {
+    filterSelect.innerHTML = '<option value="all">All Models</option>';
     sheetNames.forEach(function(name) {
       var opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
-      select.appendChild(opt);
-    });
-    select.addEventListener('change', function() {
-      currentFilter = select.value;
-      renderTable();
+      filterSelect.appendChild(opt);
     });
   }
 
-  async function fetchAllData() {
+  function showLoading(msg) {
+    loading.style.display = '';
+    stockTableWrapper.style.display = 'none';
+    noResults.style.display = 'none';
+    loading.innerHTML = '<div class="spinner"></div><p>' + msg + '</p>';
+  }
+
+  function hideLoading() {
+    loading.style.display = 'none';
+  }
+
+  async function init() {
     try {
-      loading.style.display = '';
-      stockTableWrapper.style.display = 'none';
-      noResults.style.display = 'none';
+      showLoading('กำลังโหลดรายชื่อ...');
 
-      var sheets = await discoverSheets();
-      if (sheets.length === 0) throw new Error('No sheets found');
+      sheetList = await discoverSheets();
+      if (sheetList.length === 0) throw new Error('No sheets found');
 
-      var results = await Promise.all(sheets.map(function(s) { return fetchSheetCSV(s); }));
-      allData = results.flat();
+      buildDropdown(sheetList.map(function(s) { return s.name; }));
 
-      var sheetNames = sheets.map(function(s) { return s.name; });
-
-      buildFilterButtons(sheetNames);
-      renderTable();
-      loading.style.display = 'none';
+      hideLoading();
       stockTableWrapper.style.display = '';
+
+      filterSelect.addEventListener('change', function() {
+        loadSelectedSheet();
+      });
     } catch (err) {
-      console.error('Fetch error:', err);
+      console.error('Init error:', err);
       loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">ตรวจสอบว่ารันผ่าน HTTP Server (ไม่ใช่ file://)</p>';
     }
   }
 
+  async function loadSelectedSheet() {
+    var selected = filterSelect.value;
+
+    if (selected === 'all') {
+      await loadAllSheets();
+    } else {
+      var sheet = sheetList.find(function(s) { return s.name === selected; });
+      if (!sheet) return;
+
+      showLoading('กำลังโหลด ' + sheet.name + '...');
+      try {
+        var rows = await fetchSheetCSV(sheet);
+        allData = {};
+        allData[selected] = rows;
+        loadedCount = Object.keys(allData).reduce(function(sum, k) { return sum + allData[k].length; }, 0);
+        hideLoading();
+        renderTable();
+      } catch (err) {
+        console.error('Fetch error:', err);
+        loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p>';
+      }
+    }
+  }
+
+  async function loadAllSheets() {
+    showLoading('กำลังโหลดทั้งหมด (0/' + sheetList.length + ')...');
+    allData = {};
+    loadedCount = 0;
+
+    var batchSize = 5;
+    for (var i = 0; i < sheetList.length; i += batchSize) {
+      var batch = sheetList.slice(i, i + batchSize);
+      var results = await Promise.all(batch.map(function(s) {
+        return fetchSheetCSV(s).catch(function() { return []; });
+      }));
+      batch.forEach(function(s, idx) {
+        if (results[idx].length > 0) {
+          allData[s.name] = results[idx];
+        }
+      });
+      loadedCount = Object.keys(allData).reduce(function(sum, k) { return sum + allData[k].length; }, 0);
+      var done = Math.min(i + batchSize, sheetList.length);
+      loading.querySelector('p').textContent = 'กำลังโหลดทั้งหมด (' + done + '/' + sheetList.length + ')...';
+    }
+
+    hideLoading();
+    renderTable();
+  }
+
   function renderTable() {
     var search = searchInput.value.toLowerCase();
-    var filtered = allData;
+    var rows = [];
 
-    if (currentFilter !== 'all') {
-      filtered = filtered.filter(function(d) { return d._sheetName === currentFilter; });
+    var selected = filterSelect.value;
+    if (selected === 'all') {
+      Object.keys(allData).forEach(function(k) { rows = rows.concat(allData[k]); });
+    } else if (allData[selected]) {
+      rows = allData[selected];
     }
+
     if (search) {
-      filtered = filtered.filter(function(d) {
+      rows = rows.filter(function(d) {
         return Object.values(d).some(function(v) { return String(v).toLowerCase().includes(search); });
       });
     }
 
-    if (filtered.length === 0) {
+    if (rows.length === 0) {
       stockTableWrapper.style.display = 'none';
       noResults.style.display = '';
       return;
@@ -204,7 +260,7 @@
     noResults.style.display = 'none';
     stockTableWrapper.style.display = '';
 
-    stockTableBody.innerHTML = filtered.map(function(row, idx) {
+    stockTableBody.innerHTML = rows.map(function(row, idx) {
       var mac = row['LAN MAC Address'] || (row['LAN MAC Address + Wi-Fi'] || '').split('|')[0].replace('LAN: ', '').trim();
       var defect = row['ตำหนิ'] || '';
       var hasSpec = row['CPU'] || row['Ram'];
@@ -222,5 +278,5 @@
     }).join('');
   }
 
-  fetchAllData();
+  init();
 })();
