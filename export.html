@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Export Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #09090b; color: #fafafa; padding: 40px 24px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; }
+    p { color: #a1a1aa; margin-bottom: 24px; }
+    .btn { display: inline-flex; align-items: center; padding: 12px 24px; border-radius: 12px; font-weight: 600; font-size: 0.95rem; cursor: pointer; border: none; font-family: inherit; background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; transition: all 0.2s; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(99, 102, 241, 0.5); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .status { margin-top: 20px; padding: 16px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; }
+    .status p { margin: 0; font-size: 0.9rem; }
+    .progress-bar { width: 100%; height: 4px; background: #27272a; border-radius: 2px; margin-top: 12px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 2px; transition: width 0.3s; }
+    .result { margin-top: 20px; padding: 16px; background: #18181b; border: 1px solid #22c55e; border-radius: 12px; display: none; }
+    .result p { color: #22c55e; margin: 0; }
+    a { color: #818cf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Data Export Tool</h1>
+    <p>ดึงข้อมูล S/N จากทุก sheet แล้ว export เป็น CSV เพื่อนำไปใส่ใน "All Stock" sheet</p>
+
+    <button class="btn" id="exportBtn" onclick="startExport()">เริ่มดึงข้อมูล</button>
+
+    <div class="status" id="status" style="display:none">
+      <p id="statusText"></p>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="result" id="result">
+      <p id="resultText"></p>
+    </div>
+  </div>
+
+  <script>
+    var BASE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsdWvigWU2h6_sdXOrNN4ndvKO5qAu1QBDGa3jt1ID2YE3gmJdEueosz146DdH99qv0zmrKcQr-gWP';
+    var PUB_HTML_URL = BASE_URL + '/pubhtml';
+
+    function parseCSV(text) {
+      var lines = text.trim().split('\n');
+      if (lines.length < 2) return [];
+      var rawHeaders = lines[0].split(',');
+      var headers = rawHeaders.map(function(h) { return h.trim(); });
+      var data = [];
+      for (var i = 1; i < lines.length; i++) {
+        var line = lines[i];
+        if (!line.trim()) continue;
+        var values = [];
+        var current = '';
+        var inQuotes = false;
+        for (var c = 0; c < line.length; c++) {
+          var ch = line[c];
+          if (ch === '"') { inQuotes = !inQuotes; }
+          else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+          else { current += ch; }
+        }
+        values.push(current.trim());
+        if (values.length < 2) continue;
+        var row = {};
+        for (var h = 0; h < headers.length; h++) {
+          row[headers[h]] = values[h] || '';
+        }
+        data.push(row);
+      }
+      return data;
+    }
+
+    async function startExport() {
+      var btn = document.getElementById('exportBtn');
+      var status = document.getElementById('status');
+      var statusText = document.getElementById('statusText');
+      var progressFill = document.getElementById('progressFill');
+      var result = document.getElementById('result');
+
+      btn.disabled = true;
+      status.style.display = '';
+      result.style.display = 'none';
+
+      try {
+        statusText.textContent = 'กำลังโหลดรายชื่อ sheets...';
+        progressFill.style.width = '5%';
+
+        var resp = await fetch(PUB_HTML_URL + '?_=' + Date.now());
+        var html = await resp.text();
+        var sheets = [];
+        var regex = /items\.push\(\{name:\s*"([^"]+)"[^}]*gid:\s*"([^"]+)"/g;
+        var match;
+        while ((match = regex.exec(html)) !== null) {
+          if (match[1] !== 'Total Product' && match[1] !== 'All Stock') {
+            sheets.push({ name: match[1], gid: match[2] });
+          }
+        }
+
+        var allRows = [];
+        var total = sheets.length;
+        var batchSize = 20;
+
+        for (var i = 0; i < total; i += batchSize) {
+          var batch = sheets.slice(i, i + batchSize);
+          var results = await Promise.all(batch.map(function(s) {
+            var url = BASE_URL + '/pub?output=csv&gid=' + s.gid + '&_t=' + Date.now();
+            return fetch(url).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; });
+          }));
+
+          batch.forEach(function(s, idx) {
+            var csv = results[idx];
+            if (!csv.trim()) return;
+            var rows = parseCSV(csv);
+            var rawHeaders = rows.length > 0 ? Object.keys(rows[0]) : [];
+            var snKey = null;
+            var specKey = null;
+            var defectKey = null;
+            var refKey = null;
+
+            for (var k in rows[0]) {
+              if (k.trim() === 'S/N') snKey = k;
+              if (k.trim() === 'Spec') specKey = k;
+              if (k.trim() === 'ตำหนิ') defectKey = k;
+              if (k.trim() === 'อ้างอิง') refKey = k;
+            }
+
+            rows.forEach(function(row) {
+              var sn = snKey ? (row[snKey] || '').trim() : '';
+              if (!sn) return;
+              var spec = specKey ? (row[specKey] || '') : '';
+              var defect = defectKey ? (row[defectKey] || '') : '';
+              var ref = refKey ? (row[refKey] || '') : '';
+              allRows.push({
+                no: allRows.length + 1,
+                sn: sn,
+                spec: spec,
+                quotation: '',
+                dateStart: '',
+                dateEnd: '',
+                company: '',
+                defect: defect,
+                model: ref || s.name
+              });
+            });
+          });
+
+          var done = Math.min(i + batchSize, total);
+          var pct = Math.round((done / total) * 100);
+          statusText.textContent = 'กำลังดึงข้อมูล... ' + done + '/' + total + ' sheets (' + allRows.length + ' รายการ)';
+          progressFill.style.width = pct + '%';
+        }
+
+        var csvContent = 'No.,S/N,Spec,Quotation No.,Date Start , Expire Date ,Company,ตำหนิ,อ้างอิง\n';
+        allRows.forEach(function(r) {
+          var spec = '"' + r.spec.replace(/"/g, '""') + '"';
+          var defect = '"' + r.defect.replace(/"/g, '""') + '"';
+          var model = '"' + r.model.replace(/"/g, '""') + '"';
+          csvContent += r.no + ',' + r.sn + ',' + spec + ',,,,' + r.company + ',' + defect + ',' + model + '\n';
+        });
+
+        var blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'all_stock_export.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        progressFill.style.width = '100%';
+        statusText.textContent = 'เสร็จสิ้น!';
+        result.style.display = '';
+        document.getElementById('resultText').textContent = 'ดาวน์โหลด all_stock_export.csv แล้ว เปิด Google Sheets → "All Stock" sheet → File → Import → Upload → เลือกไฟล์ → Import location: Replace current sheet → Import data';
+
+      } catch (err) {
+        statusText.textContent = 'เกิดข้อผิดพลาด: ' + err.message;
+        console.error(err);
+      }
+
+      btn.disabled = false;
+    }
+  </script>
+</body>
+</html>
