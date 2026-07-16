@@ -2,9 +2,10 @@
   var BASE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsdWvigWU2h6_sdXOrNN4ndvKO5qAu1QBDGa3jt1ID2YE3gmJdEueosz146DdH99qv0zmrKcQr-gWP';
   var PUB_HTML_URL = BASE_URL + '/pubhtml';
   var ALL_STOCK_GID = '1658173385';
+  var CACHE_KEY = 'stock_cache_v3';
+  var CACHE_TTL = 5 * 60 * 1000;
 
   var allData = [];
-  var sheetList = [];
   var currentFilter = 'all';
 
   var navbar = document.getElementById('navbar');
@@ -53,126 +54,127 @@
 
   searchInput.addEventListener('input', function() { renderTable(); });
 
-  function parseCSV(text) {
-    var lines = text.trim().split('\n');
-    if (lines.length < 2) return [];
-    var rawHeaders = lines[0].split(',');
+  function stripBOM(s) { return s.charCodeAt(0) === 0xFEFF ? s.substring(1) : s; }
 
-    var headers;
-    var format = 'hp';
-    if (rawHeaders[1] && rawHeaders[1].trim() === 'S/N') {
-      headers = ['No.', 'S/N', 'Spec', 'Quotation No.', 'Date Start', 'Expire Date', 'Company', 'ตำหนิ', 'อ้างอิง'];
-    } else if (rawHeaders.length === 12) {
-      headers = ['Timestamp','Owner','Computer Name','Manufacturer','Model','Serial Number','CPU','Ram','GPU','Storage','LAN MAC Address + Wi-Fi','ตำหนิ'];
-      format = 'dell';
-    } else {
-      headers = rawHeaders.map(function(h) { return h.trim(); });
-    }
-
-    var data = [];
-    for (var i = 1; i < lines.length; i++) {
-      var line = lines[i];
-      if (!line.trim()) continue;
-
-      var values = [];
-      var current = '';
-      var inQuotes = false;
-      for (var c = 0; c < line.length; c++) {
-        var ch = line[c];
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+  function csvRow(line) {
+    var values = [];
+    var current = '';
+    var inQ = false;
+    for (var c = 0; c < line.length; c++) {
+      var ch = line[c];
+      if (inQ) {
+        if (ch === '"') {
+          if (c + 1 < line.length && line[c + 1] === '"') { current += '"'; c++; }
+          else { inQ = false; }
+        } else { current += ch; }
+      } else {
+        if (ch === '"') { inQ = true; }
+        else if (ch === ',') { values.push(current); current = ''; }
         else { current += ch; }
       }
-      values.push(current.trim());
+    }
+    values.push(current);
+    return values;
+  }
 
-      if (values.length < 3) continue;
+  function parseAllStockCSV(text) {
+    text = stripBOM(text).replace(/\r\n/g, '\n');
+    var lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    var hdrs = csvRow(lines[0]).map(function(h) { return h.trim(); });
+    if (hdrs.length < 3) return [];
+    var hasSN = false;
+    for (var i = 0; i < hdrs.length; i++) {
+      if (hdrs[i] === 'S/N') { hasSN = true; break; }
+    }
+    if (!hasSN) return [];
+    var modelIdx = -1;
+    for (var i = 0; i < hdrs.length; i++) {
+      if (hdrs[i] === 'อ้างอิง') { modelIdx = i; break; }
+    }
+    var snIdx = hdrs.indexOf('S/N');
+    var specIdx = hdrs.indexOf('Spec');
+    var defectIdx = hdrs.indexOf('ตำหนิ');
+    var data = [];
+    for (var i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      var vals = csvRow(lines[i]);
+      var sn = (vals[snIdx] || '').trim();
+      if (!sn) continue;
+      var spec = (vals[specIdx] || '').trim();
+      var specParts = spec.split(',');
+      var defect = defectIdx >= 0 ? (vals[defectIdx] || '').trim() : '';
+      var model = modelIdx >= 0 ? (vals[modelIdx] || '').trim() : '';
+      data.push({
+        'Serial Number': sn,
+        'Spec': spec,
+        'CPU': (specParts[0] || '').trim(),
+        'Ram': (specParts[1] || '').trim(),
+        'Storage': (specParts[2] || '').trim(),
+        'GPU': '',
+        'Model': model,
+        'ตำหนิ': defect,
+        'LAN MAC Address': '',
+        'LAN MAC Address + Wi-Fi': '',
+        '_sheetName': model
+      });
+    }
+    return data;
+  }
 
+  function parseCSV(text) {
+    text = stripBOM(text).replace(/\r\n/g, '\n');
+    var lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    var hdrs = csvRow(lines[0]).map(function(h) { return h.trim(); });
+    var format = 'hp';
+    var hpHeaders = ['No.', 'S/N', 'Spec', 'Quotation No.', 'Date Start', 'Expire Date', 'Company', 'ตำหนิ', 'อ้างอิง'];
+    var useHP = false;
+    for (var i = 0; i < hdrs.length; i++) {
+      if (hdrs[i] === 'S/N') { useHP = true; break; }
+    }
+    if (!useHP && hdrs.length === 12) { format = 'dell'; }
+    var data = [];
+    for (var i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      var vals = csvRow(lines[i]);
       var row = {};
-      for (var h = 0; h < headers.length; h++) {
-        row[headers[h]] = values[h] || '';
+      for (var h = 0; h < hpHeaders.length; h++) {
+        row[hpHeaders[h]] = (vals[h] || '').trim();
       }
-
-      if (format === 'hp') {
+      if (format === 'hp' || useHP) {
         var spec = row['Spec'] || '';
-        var specParts = spec.split(',');
-        var cpu = (specParts[0] || '').trim();
-        var ram = (specParts[1] || '').trim();
-        var storage = (specParts[2] || '').trim();
+        var sp = spec.split(',');
         row['Serial Number'] = row['S/N'] || '';
-        row['CPU'] = cpu;
-        row['Ram'] = ram;
-        row['Storage'] = storage;
+        row['CPU'] = (sp[0] || '').trim();
+        row['Ram'] = (sp[1] || '').trim();
+        row['Storage'] = (sp[2] || '').trim();
         row['GPU'] = '';
-        row['Model'] = '';
+        row['Model'] = row['อ้างอิง'] || '';
         row['LAN MAC Address'] = '';
+        row['LAN MAC Address + Wi-Fi'] = '';
         if (!row['ตำหนิ']) row['ตำหนิ'] = '';
+      } else {
+        for (var h = 0; h < hdrs.length; h++) {
+          row[hdrs[h]] = (vals[h] || '').trim();
+        }
+        if (row['LAN MAC Address + Wi-Fi']) {
+          var parts = row['LAN MAC Address + Wi-Fi'].split('|');
+          row['LAN MAC Address'] = (parts[0] || '').replace('LAN: ', '').trim();
+        }
       }
-
-      if (format === 'dell' && rawHeaders.length === 12 && row['LAN MAC Address + Wi-Fi']) {
-        var combined = row['LAN MAC Address + Wi-Fi'];
-        var parts = combined.split('|');
-        row['LAN MAC Address'] = (parts[0] || '').replace('LAN: ', '').trim();
-        row['Wi-Fi MAC Address'] = (parts[1] || '').replace('Wi-Fi:', '').trim();
-      }
-
       data.push(row);
     }
     return data;
   }
 
-  function parseAllStockCSV(text) {
-    var lines = text.trim().split('\n');
-    if (lines.length < 2) return [];
-    var rawHeaders = lines[0].split(',');
-
-    var headers;
-    if (rawHeaders[1] && rawHeaders[1].trim() === 'S/N') {
-      headers = ['No.', 'S/N', 'Spec', 'Quotation No.', 'Date Start', 'Expire Date', 'Company', 'ตำหนิ', 'อ้างอิง'];
-    } else if (rawHeaders[1] && rawHeaders[1].trim() === 'ชื่อสินค้า') {
-      return [];
-    } else {
-      headers = rawHeaders.map(function(h) { return h.trim(); });
-    }
-
-    var data = [];
-    for (var i = 1; i < lines.length; i++) {
-      var line = lines[i];
-      if (!line.trim()) continue;
-
-      var values = [];
-      var current = '';
-      var inQuotes = false;
-      for (var c = 0; c < line.length; c++) {
-        var ch = line[c];
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
-        else { current += ch; }
-      }
-      values.push(current.trim());
-
-      if (values.length < 3) continue;
-
-      var row = {};
-      for (var h = 0; h < headers.length; h++) {
-        row[headers[h]] = values[h] || '';
-      }
-
-      if (headers[1] && headers[1] === 'S/N') {
-        var spec = row['Spec'] || '';
-        var specParts = spec.split(',');
-        row['Serial Number'] = row['S/N'] || '';
-        row['CPU'] = (specParts[0] || '').trim();
-        row['Ram'] = (specParts[1] || '').trim();
-        row['Storage'] = (specParts[2] || '').trim();
-        row['GPU'] = '';
-        row['Model'] = row['อ้างอิง'] || '';
-        row['LAN MAC Address'] = '';
-        if (!row['ตำหนิ']) row['ตำหนิ'] = '';
-      }
-
-      data.push(row);
-    }
-    return data;
+  async function fetchAllStock() {
+    var url = BASE_URL + '/pub?output=csv&gid=' + ALL_STOCK_GID + '&_t=' + Date.now();
+    var resp = await fetch(url);
+    if (!resp.ok) return [];
+    var csv = await resp.text();
+    if (!csv.trim() || csv.trim().length < 10) return [];
+    return parseAllStockCSV(csv);
   }
 
   async function discoverSheets() {
@@ -199,33 +201,106 @@
     return rows;
   }
 
-  async function fetchAllStock() {
-    var url = BASE_URL + '/pub?output=csv&gid=' + ALL_STOCK_GID + '&_t=' + Date.now();
-    var resp = await fetch(url);
-    if (!resp.ok) return [];
-    var csv = await resp.text();
-    if (!csv.trim()) return [];
-    var rows = parseAllStockCSV(csv);
-    if (rows.length === 0) return [];
-    return rows;
-  }
-
   function buildDropdown(sheetNames) {
-    filterSelect.innerHTML = '<option value="all">All Models</option>';
-    sheetNames.forEach(function(name) {
+    filterSelect.innerHTML = '<option value="all">All Models (' + allData.length + ')</option>';
+    var countMap = {};
+    allData.forEach(function(r) { var n = r._sheetName || 'Unknown'; countMap[n] = (countMap[n] || 0) + 1; });
+    sheetNames.sort().forEach(function(name) {
       var opt = document.createElement('option');
       opt.value = name;
-      opt.textContent = name;
+      opt.textContent = name + ' (' + (countMap[name] || 0) + ')';
       filterSelect.appendChild(opt);
     });
   }
 
-  function updateProgress(done, total, msg) {
+  function updateProgress(done, total) {
     var pct = Math.round((done / total) * 100);
     loading.innerHTML =
       '<div class="spinner"></div>' +
-      '<p>' + (msg || 'กำลังโหลด...') + ' ' + done + '/' + total + '</p>' +
+      '<p>กำลังโหลด... ' + done + '/' + total + '</p>' +
       '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
+  }
+
+  function getCached() {
+    try {
+      var raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      var cache = JSON.parse(raw);
+      if (Date.now() - cache.ts > CACHE_TTL) return null;
+      return cache.data;
+    } catch (e) { return null; }
+  }
+
+  function setCache(data) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: data })); } catch (e) {}
+  }
+
+  async function loadAllStock() {
+    var rows = await fetchAllStock();
+    if (rows.length === 0) return null;
+    var sheetNames = [];
+    var seen = {};
+    rows.forEach(function(r) {
+      if (r._sheetName && !seen[r._sheetName]) { seen[r._sheetName] = true; sheetNames.push(r._sheetName); }
+    });
+    return { rows: rows, sheetNames: sheetNames };
+  }
+
+  async function loadBatch() {
+    var sheets = await discoverSheets();
+    if (sheets.length === 0) return null;
+    var total = sheets.length;
+    allData = [];
+    updateProgress(0, total);
+    var batchSize = 30;
+    for (var i = 0; i < total; i += batchSize) {
+      var batch = sheets.slice(i, i + batchSize);
+      var results = await Promise.all(batch.map(function(s) {
+        return fetchSheetCSV(s).catch(function() { return []; });
+      }));
+      results.forEach(function(rows) {
+        var withSN = rows.filter(function(r) { return r['Serial Number'] && r['Serial Number'].trim(); });
+        allData = allData.concat(withSN);
+      });
+      updateProgress(Math.min(i + batchSize, total), total);
+    }
+    var sheetNames = [];
+    var seen = {};
+    allData.forEach(function(r) {
+      if (r._sheetName && !seen[r._sheetName]) { seen[r._sheetName] = true; sheetNames.push(r._sheetName); }
+    });
+    return { rows: allData, sheetNames: sheetNames };
+  }
+
+  function renderTable() {
+    var search = searchInput.value.toLowerCase();
+    var filtered = allData;
+    if (currentFilter !== 'all') {
+      filtered = filtered.filter(function(d) { return d._sheetName === currentFilter; });
+    }
+    if (search) {
+      filtered = filtered.filter(function(d) {
+        return d['Serial Number'] && d['Serial Number'].trim() && Object.values(d).some(function(v) { return String(v).toLowerCase().indexOf(search) !== -1; });
+      });
+    } else {
+      filtered = filtered.filter(function(d) { return d['Serial Number'] && d['Serial Number'].trim(); });
+    }
+    if (filtered.length === 0) {
+      stockTableWrapper.style.display = 'none';
+      noResults.style.display = '';
+      return;
+    }
+    noResults.style.display = 'none';
+    stockTableWrapper.style.display = '';
+    var html = [];
+    for (var i = 0; i < filtered.length; i++) {
+      var row = filtered[i];
+      var mac = row['LAN MAC Address'] || (row['LAN MAC Address + Wi-Fi'] || '').split('|')[0].replace('LAN: ', '').trim();
+      var defect = row['ตำหนิ'] || '';
+      var hasSpec = row['CPU'] || row['Ram'];
+      html.push('<tr><td>' + (i + 1) + '</td><td><span class="serial-badge">' + (row['Model'] || '-') + '</span></td><td><span class="serial-badge">' + (row['Serial Number'] || '-') + '</span></td><td>' + (row['CPU'] || '-') + '</td><td><span class="ram-badge">' + (row['Ram'] || '-') + '</span></td><td>' + (row['GPU'] || '-') + '</td><td>' + (row['Storage'] || '-') + '</td><td>' + (mac || '-') + '</td><td>' + (defect ? '<span class="defect-badge">' + defect + '</span>' : (hasSpec ? '<span style="color:#22c55e">OK</span>' : '<span style="color:#a1a1aa">-</span>')) + '</td></tr>');
+    }
+    stockTableBody.innerHTML = html.join('');
   }
 
   async function init() {
@@ -233,107 +308,42 @@
       loading.style.display = '';
       stockTableWrapper.style.display = 'none';
 
-      loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดข้อมูล...</p>';
-
-      var allStockRows = await fetchAllStock();
-
-      if (allStockRows.length > 0) {
-        allData = allStockRows;
-
-        var sheetNames = [];
-        var seen = {};
-        allData.forEach(function(r) {
-          if (r._sheetName && !seen[r._sheetName]) { seen[r._sheetName] = true; sheetNames.push(r._sheetName); }
-        });
-        buildDropdown(sheetNames);
-      } else {
-        sheetList = await discoverSheets();
-        if (sheetList.length === 0) throw new Error('No sheets found');
-
-        var total = sheetList.length;
-        allData = [];
-        updateProgress(0, total, 'กำลังโหลดทั้งหมด...');
-
-        var batchSize = 20;
-        for (var i = 0; i < total; i += batchSize) {
-          var batch = sheetList.slice(i, i + batchSize);
-          var results = await Promise.all(batch.map(function(s) {
-            return fetchSheetCSV(s).catch(function() { return []; });
-          }));
-          batch.forEach(function(s, idx) {
-            var rows = results[idx];
-            if (rows.length > 0) {
-              var withSN = rows.filter(function(r) { return r['Serial Number'] && r['Serial Number'].trim(); });
-              if (withSN.length > 0) {
-                allData = allData.concat(withSN);
-              }
-            }
-          });
-          updateProgress(Math.min(i + batchSize, total), total, 'กำลังโหลดทั้งหมด...');
-        }
-
-        var sheetNames2 = [];
-        var seen2 = {};
-        allData.forEach(function(r) {
-          if (!seen2[r._sheetName]) { seen2[r._sheetName] = true; sheetNames2.push(r._sheetName); }
-        });
-        buildDropdown(sheetNames2);
+      var cached = getCached();
+      if (cached) {
+        allData = cached.rows;
+        buildDropdown(cached.sheetNames);
+        loading.style.display = 'none';
+        stockTableWrapper.style.display = '';
+        filterSelect.addEventListener('change', function() { currentFilter = filterSelect.value; renderTable(); });
+        renderTable();
+        return;
       }
 
-      filterSelect.addEventListener('change', function() {
-        currentFilter = filterSelect.value;
-        renderTable();
-      });
+      loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดข้อมูล...</p>';
 
+      var result = await loadAllStock();
+
+      if (result && result.rows.length > 0) {
+        allData = result.rows;
+        buildDropdown(result.sheetNames);
+        setCache(result);
+      } else {
+        result = await loadBatch();
+        if (result) {
+          allData = result.rows;
+          buildDropdown(result.sheetNames);
+          setCache(result);
+        }
+      }
+
+      filterSelect.addEventListener('change', function() { currentFilter = filterSelect.value; renderTable(); });
       loading.style.display = 'none';
       stockTableWrapper.style.display = '';
       renderTable();
     } catch (err) {
       console.error('Init error:', err);
-      loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">ตรวจสอบว่ารันผ่าน HTTP Server (ไม่ใช่ file://)</p>';
+      loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">ตรวจสอบว่ารันผ่าน HTTP Server</p>';
     }
-  }
-
-  function renderTable() {
-    var search = searchInput.value.toLowerCase();
-    var filtered = allData;
-
-    if (currentFilter !== 'all') {
-      filtered = filtered.filter(function(d) { return d._sheetName === currentFilter; });
-    }
-    if (search) {
-      filtered = filtered.filter(function(d) {
-        return d['Serial Number'] && d['Serial Number'].trim() && Object.values(d).some(function(v) { return String(v).toLowerCase().includes(search); });
-      });
-    } else {
-      filtered = filtered.filter(function(d) { return d['Serial Number'] && d['Serial Number'].trim(); });
-    }
-
-    if (filtered.length === 0) {
-      stockTableWrapper.style.display = 'none';
-      noResults.style.display = '';
-      return;
-    }
-
-    noResults.style.display = 'none';
-    stockTableWrapper.style.display = '';
-
-    stockTableBody.innerHTML = filtered.map(function(row, idx) {
-      var mac = row['LAN MAC Address'] || (row['LAN MAC Address + Wi-Fi'] || '').split('|')[0].replace('LAN: ', '').trim();
-      var defect = row['ตำหนิ'] || '';
-      var hasSpec = row['CPU'] || row['Ram'];
-      return '<tr>' +
-        '<td>' + (idx + 1) + '</td>' +
-        '<td><span class="serial-badge">' + (row['Model'] || '-') + '</span></td>' +
-        '<td><span class="serial-badge">' + (row['Serial Number'] || '-') + '</span></td>' +
-        '<td>' + (row['CPU'] || '-') + '</td>' +
-        '<td><span class="ram-badge">' + (row['Ram'] || '-') + '</span></td>' +
-        '<td>' + (row['GPU'] || '-') + '</td>' +
-        '<td>' + (row['Storage'] || '-') + '</td>' +
-        '<td>' + (mac || '-') + '</td>' +
-        '<td>' + (defect ? '<span class="defect-badge">' + defect + '</span>' : (hasSpec ? '<span style="color:#22c55e">OK</span>' : '<span style="color:#a1a1aa">-</span>')) + '</td>' +
-      '</tr>';
-    }).join('');
   }
 
   init();
