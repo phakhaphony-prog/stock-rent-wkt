@@ -58,7 +58,7 @@
     var headers;
     var format = 'dell';
     if (rawHeaders[1] && rawHeaders[1].trim() === 'S/N') {
-      headers = rawHeaders.map(function(h) { return h.trim(); });
+      headers = ['No.', 'S/N', 'Spec', 'Quotation No.', 'Date Start', 'Expire Date', 'Company', 'ตำหนิ', 'อ้างอิง'];
       format = 'hp';
     } else if (headerCount === 12) {
       headers = ['Timestamp','Owner','Computer Name','Manufacturer','Model','Serial Number','CPU','Ram','GPU','Storage','LAN MAC Address + Wi-Fi','ตำหนิ'];
