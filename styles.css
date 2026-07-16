@@ -202,7 +202,10 @@ ul {
 .hero-stats {
   display: flex;
   justify-content: center;
-  gap: 60px;
+}
+
+.stat-total .stat-number {
+  font-size: 3rem;
 }
 
 .stat-number {
@@ -429,6 +432,45 @@ ul {
   padding: 60px 0;
   color: var(--text-muted);
   font-size: 1.1rem;
+}
+
+/* Model Stats Grid */
+.model-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.model-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  text-align: center;
+  transition: border-color 0.2s, transform 0.2s;
+  cursor: default;
+}
+
+.model-stat-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.model-stat-card .stat-number {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.model-stat-card .stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
 }
 
 /* About */

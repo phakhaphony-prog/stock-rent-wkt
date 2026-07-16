@@ -27,22 +27,14 @@
       <div class="hero-content">
         <span class="badge">PC Stock Management</span>
         <h1>Manage your <span class="gradient-text">PC inventory</span></h1>
-        <p class="hero-desc">Real-time stock tracking for Dell OptiPlex computers. Data synced from Google Sheets.</p>
+        <p class="hero-desc">Real-time stock tracking for all PC models. Data synced from Google Sheets.</p>
         <div class="hero-actions">
           <a href="#stock" class="btn btn-primary btn-lg">View Stock</a>
         </div>
         <div class="hero-stats">
-          <div class="stat">
+          <div class="stat stat-total">
             <span class="stat-number" id="totalCount">-</span>
             <span class="stat-label">Total PCs</span>
-          </div>
-          <div class="stat">
-            <span class="stat-number" id="optiplex3000Count">-</span>
-            <span class="stat-label">OptiPlex 3000</span>
-          </div>
-          <div class="stat">
-            <span class="stat-number" id="optiplex5000Count">-</span>
-            <span class="stat-label">OptiPlex 5000</span>
           </div>
         </div>
       </div>
@@ -62,12 +54,11 @@
         <div class="search-box">
           <input type="text" id="searchInput" placeholder="Search by serial, model, CPU...">
         </div>
-        <div class="filter-buttons">
-          <button class="filter-btn active" data-filter="all">All</button>
-          <button class="filter-btn" data-filter="OptiPlex 3000">OptiPlex 3000</button>
-          <button class="filter-btn" data-filter="OptiPlex 5000">OptiPlex 5000</button>
+        <div class="filter-buttons" id="filterButtons">
         </div>
       </div>
+
+      <div class="model-stats" id="modelStats"></div>
 
       <div class="loading" id="loading">
         <div class="spinner"></div>

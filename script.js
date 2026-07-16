@@ -177,12 +177,13 @@
       var sheetNames = sheets.map(function(s) { return s.name; });
 
       document.getElementById('totalCount').textContent = allData.length;
-      var statsHtml = '<div class="stat"><span class="stat-number">' + allData.length + '</span><span class="stat-label">Total PCs</span></div>';
+
+      var modelStatsHtml = '';
       sheetNames.forEach(function(name) {
         var count = allData.filter(function(d) { return d._sheetName === name; }).length;
-        statsHtml += '<div class="stat"><span class="stat-number">' + count + '</span><span class="stat-label">' + name + '</span></div>';
+        modelStatsHtml += '<div class="model-stat-card"><span class="stat-number">' + count + '</span><span class="stat-label">' + name + '</span></div>';
       });
-      document.querySelector('.hero-stats').innerHTML = statsHtml;
+      document.getElementById('modelStats').innerHTML = modelStatsHtml;
 
       buildFilterButtons(sheetNames);
       renderTable();
