@@ -173,13 +173,6 @@
 
       document.getElementById('totalCount').textContent = allData.length;
 
-      var modelStatsHtml = '';
-      sheetNames.forEach(function(name) {
-        var count = allData.filter(function(d) { return d._sheetName === name; }).length;
-        modelStatsHtml += '<div class="model-stat-card"><span class="stat-number">' + count + '</span><span class="stat-label">' + name + '</span></div>';
-      });
-      document.getElementById('modelStats').innerHTML = modelStatsHtml;
-
       buildFilterButtons(sheetNames);
       renderTable();
       loading.style.display = 'none';
