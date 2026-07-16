@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Rent WKT - PC Inventory</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <nav class="navbar" id="navbar">
+    <div class="container nav-container">
+      <a href="#" class="logo">Stock Rent WKT</a>
+      <ul class="nav-links">
+        <li><a href="#stock">Stock</a></li>
+        <li><a href="#about">About</a></li>
+      </ul>
+      <a href="#stock" class="btn btn-primary btn-nav">View Stock</a>
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <span class="badge">PC Stock Management</span>
+        <h1>Manage your <span class="gradient-text">PC inventory</span></h1>
+        <p class="hero-desc">Real-time stock tracking for Dell OptiPlex computers. Data synced from Google Sheets.</p>
+        <div class="hero-actions">
+          <a href="#stock" class="btn btn-primary btn-lg">View Stock</a>
+        </div>
+        <div class="hero-stats">
+          <div class="stat">
+            <span class="stat-number" id="totalCount">-</span>
+            <span class="stat-label">Total PCs</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="optiplex3000Count">-</span>
+            <span class="stat-label">OptiPlex 3000</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="optiplex5000Count">-</span>
+            <span class="stat-label">OptiPlex 5000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="hero-glow"></div>
+  </header>
+
+  <section class="stock-section" id="stock">
+    <div class="container">
+      <div class="section-header">
+        <span class="badge">Inventory</span>
+        <h2>PC Stock List</h2>
+        <p class="section-desc">ข้อมูลอัปเดตอัตโนมัติจาก Google Sheets</p>
+      </div>
+
+      <div class="controls">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search by serial, model, CPU...">
+        </div>
+        <div class="filter-buttons">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="OptiPlex 3000">OptiPlex 3000</button>
+          <button class="filter-btn" data-filter="OptiPlex 5000">OptiPlex 5000</button>
+        </div>
+      </div>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>กำลังโหลดข้อมูล...</p>
+      </div>
+
+      <div class="stock-table-wrapper" id="stockTableWrapper" style="display:none">
+        <table class="stock-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Model</th>
+              <th>Serial Number</th>
+              <th>CPU</th>
+              <th>RAM</th>
+              <th>GPU</th>
+              <th>Storage</th>
+              <th>LAN MAC</th>
+              <th>ตำหนิ</th>
+            </tr>
+          </thead>
+          <tbody id="stockTableBody">
+          </tbody>
+        </table>
+      </div>
+
+      <div class="no-results" id="noResults" style="display:none">
+        <p>ไม่พบข้อมูลที่ค้นหา</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="about" id="about">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-content">
+          <span class="badge">About</span>
+          <h2>Stock Rent WKT</h2>
+          <p>ระบบจัดการข้อมูลสินค้าในสต็อก สำหรับธุรกิจให้เช่าคอมพิวเตอร์ ข้อมูลอัปเดตอัตโนมัติจาก Google Sheets</p>
+          <ul class="about-list">
+            <li>&#10003; ข้อมูล Realtime จาก Google Sheets</li>
+            <li>&#10003; ค้นหาและกรองข้อมูลได้</li>
+            <li>&#10003; แสดงรายละเอียดสเปคเครื่อง</li>
+            <li>&#10003; ใช้งานง่ายบนมือถือ</li>
+          </ul>
+        </div>
+        <div class="about-visual">
+          <div class="visual-card">
+            <div class="visual-bar" style="width: 85%"></div>
+            <span>Dell OptiPlex 3000</span>
+          </div>
+          <div class="visual-card">
+            <div class="visual-bar" style="width: 15%"></div>
+            <span>Dell OptiPlex 5000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <p>&copy; 2026 Stock Rent WKT. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
