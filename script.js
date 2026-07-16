@@ -125,7 +125,9 @@
     var regex = /items\.push\(\{name:\s*"([^"]+)"[^}]*gid:\s*"([^"]+)"/g;
     var match;
     while ((match = regex.exec(html)) !== null) {
-      sheets.push({ name: match[1], gid: match[2] });
+      if (match[1] !== 'Total Product') {
+        sheets.push({ name: match[1], gid: match[2] });
+      }
     }
     return sheets;
   }
