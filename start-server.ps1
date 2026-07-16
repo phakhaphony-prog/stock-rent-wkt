@@ -29,6 +29,9 @@ try {
                 }
                 $ct = $types[$ext]
                 if ($ct) { $context.Response.ContentType = $ct }
+                $context.Response.AddHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+                $context.Response.AddHeader("Pragma", "no-cache")
+                $context.Response.AddHeader("Expires", "0")
                 $context.Response.ContentLength64 = $bytes.Length
                 $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
             } else {
