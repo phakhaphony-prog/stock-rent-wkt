@@ -290,33 +290,43 @@ ul {
   color: var(--text-muted);
 }
 
-.filter-buttons {
-  display: flex;
-  gap: 8px;
+.filter-select-wrap {
+  position: relative;
 }
 
-.filter-btn {
-  padding: 10px 20px;
+.filter-select {
+  padding: 10px 36px 10px 16px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  color: var(--text-muted);
+  color: var(--text);
   font-size: 0.9rem;
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
   font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 220px;
+  transition: border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a1a1aa' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 5.5l6.5 6.5 6.5-6.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px;
 }
 
-.filter-btn:hover {
+.filter-select:hover {
   border-color: var(--text-muted);
-  color: var(--text);
 }
 
-.filter-btn.active {
-  background: var(--primary);
+.filter-select:focus {
   border-color: var(--primary);
-  color: #fff;
+}
+
+.filter-select option {
+  background: var(--bg-card);
+  color: var(--text);
+  padding: 8px;
 }
 
 /* Loading */
@@ -594,8 +604,12 @@ ul {
     max-width: none;
   }
 
-  .filter-buttons {
-    justify-content: center;
+  .filter-select-wrap {
+    width: 100%;
+  }
+
+  .filter-select {
+    width: 100%;
   }
 
   .about-grid {

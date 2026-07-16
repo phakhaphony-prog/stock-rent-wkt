@@ -141,24 +141,19 @@
   }
 
   function buildFilterButtons(sheetNames) {
-    var container = document.querySelector('.filter-buttons');
-    if (!container) return;
-    container.innerHTML = '<button class="filter-btn active" data-filter="all">All (' + allData.length + ')</button>';
+    var select = document.getElementById('filterSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="all">All (' + allData.length + ')</option>';
     sheetNames.forEach(function(name) {
       var count = allData.filter(function(d) { return d._sheetName === name; }).length;
-      var btn = document.createElement('button');
-      btn.className = 'filter-btn';
-      btn.dataset.filter = name;
-      btn.textContent = name + ' (' + count + ')';
-      container.appendChild(btn);
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name + ' (' + count + ')';
+      select.appendChild(opt);
     });
-    container.querySelectorAll('.filter-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        container.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        renderTable();
-      });
+    select.addEventListener('change', function() {
+      currentFilter = select.value;
+      renderTable();
     });
   }
 
