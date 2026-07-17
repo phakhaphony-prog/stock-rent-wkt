@@ -1,4 +1,6 @@
 (() => {
+  var BASE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsdWvigWU2h6_sdXOrNN4ndvKO5qAu1QBDGa3jt1ID2YE3gmJdEueosz146DdH99qv0zmrKcQr-gWP';
+  var SHEET_NAMES_URL = BASE_SHEET_URL + '/pubhtml';
   var allData = [];
   var currentFilter = 'all';
 
@@ -102,6 +104,45 @@
     return data;
   }
 
+  function parseSheetCSV(csv, sheetName) {
+    csv = csv.replace(/\r\n/g, '\n');
+    var lines = csv.trim().split('\n');
+    if (lines.length < 2) return [];
+    var hdrs = csvRow(lines[0]).map(function(h) { return h.trim(); });
+    var snIdx = -1, specIdx = -1, defectIdx = -1, modelIdx = -1;
+    for (var i = 0; i < hdrs.length; i++) {
+      if (hdrs[i] === 'S/N') snIdx = i;
+      else if (hdrs[i] === 'Spec') specIdx = i;
+      else if (hdrs[i] === 'ตำหนิ') defectIdx = i;
+      else if (hdrs[i] === 'อ้างอิง') modelIdx = i;
+    }
+    if (snIdx < 0) return [];
+    var data = [];
+    for (var i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      var vals = csvRow(lines[i]);
+      var sn = (vals[snIdx] || '').trim();
+      if (!sn) continue;
+      var spec = specIdx >= 0 ? (vals[specIdx] || '').trim() : '';
+      var sp = spec.split(',');
+      var defect = defectIdx >= 0 ? (vals[defectIdx] || '').trim() : '';
+      var model = modelIdx >= 0 ? (vals[modelIdx] || '').trim() : sheetName;
+      if (!model) model = sheetName;
+      data.push({
+        'Serial Number': sn,
+        'CPU': (sp[0] || '').trim(),
+        'Ram': (sp[1] || '').trim(),
+        'Storage': (sp[2] || '').trim(),
+        'GPU': '',
+        'Model': model,
+        'ตำหนิ': defect,
+        'LAN MAC Address': '',
+        '_sheetName': model
+      });
+    }
+    return data;
+  }
+
   function buildDropdown(sheetNames) {
     var countMap = {};
     allData.forEach(function(r) { var n = r._sheetName || 'Unknown'; countMap[n] = (countMap[n] || 0) + 1; });
@@ -112,6 +153,11 @@
       opt.textContent = name + ' (' + (countMap[name] || 0) + ')';
       filterSelect.appendChild(opt);
     });
+  }
+
+  function updateProgress(done, total) {
+    var pct = Math.round((done / total) * 100);
+    loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลด... ' + done + '/' + total + ' sheets</p><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
   }
 
   function renderTable() {
@@ -142,19 +188,64 @@
     stockTableBody.innerHTML = html.join('');
   }
 
+  async function loadFromLocalCSV() {
+    var resp = await fetch('/data.csv?_=' + Date.now());
+    if (!resp.ok) throw new Error('not found');
+    var csv = await resp.text();
+    return parseDataCSV(csv);
+  }
+
+  async function loadFromGoogleSheets() {
+    var manifestResp = await fetch(SHEET_NAMES_URL + '?_=' + Date.now());
+    var html = await manifestResp.text();
+    var regex = /items\.push\(\{name:\s*"([^"]+)"[^}]*gid:\s*"([^"]+)"/g;
+    var match;
+    var sheets = [];
+    while ((match = regex.exec(html)) !== null) {
+      if (match[1] !== 'Total Product' && match[1] !== 'All Stock') {
+        sheets.push({ name: match[1], gid: match[2] });
+      }
+    }
+    if (sheets.length === 0) return [];
+
+    var total = sheets.length;
+    var data = [];
+    var batchSize = 20;
+    for (var i = 0; i < total; i += batchSize) {
+      var batch = sheets.slice(i, i + batchSize);
+      var results = await Promise.all(batch.map(function(s) {
+        var url = BASE_SHEET_URL + '/pub?output=csv&gid=' + s.gid + '&_=' + Date.now();
+        return fetch(url).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; });
+      }));
+      results.forEach(function(csv, idx) {
+        if (!csv || csv.length < 10) return;
+        var rows = parseSheetCSV(csv, batch[idx].name);
+        data = data.concat(rows);
+      });
+      updateProgress(Math.min(i + batchSize, total), total);
+    }
+    return data;
+  }
+
   async function init() {
     try {
       loading.style.display = '';
       stockTableWrapper.style.display = 'none';
       loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดข้อมูล...</p>';
 
-      var resp = await fetch('/data.csv?_=' + Date.now());
-      if (!resp.ok) throw new Error('data.csv not found - restart server');
-      var csv = await resp.text();
-      allData = parseDataCSV(csv);
+      try {
+        allData = await loadFromLocalCSV();
+      } catch (e) {
+        allData = [];
+      }
 
       if (allData.length === 0) {
-        loading.innerHTML = '<p style="color:#f59e0b">ไม่พบข้อมูล</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">รีสตาร์ท server เพื่อดึงข้อมูลใหม่</p>';
+        loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดจาก Google Sheets...</p>';
+        allData = await loadFromGoogleSheets();
+      }
+
+      if (allData.length === 0) {
+        loading.innerHTML = '<p style="color:#f59e0b">ไม่พบข้อมูล</p>';
         return;
       }
 
@@ -170,7 +261,7 @@
       renderTable();
     } catch (err) {
       console.error('Init error:', err);
-      loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">' + err.message + '</p>';
+      loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p>';
     }
   }
 
