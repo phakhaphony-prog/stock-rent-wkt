@@ -48,8 +48,6 @@
 
   searchInput.addEventListener('input', function() { renderTable(); });
 
-  function stripBOM(s) { return s.charCodeAt(0) === 0xFEFF ? s.substring(1) : s; }
-
   function csvRow(line) {
     var values = [];
     var current = '';
@@ -71,19 +69,17 @@
     return values;
   }
 
-  function parseCSV(csv, sheetName) {
-    csv = stripBOM(csv).replace(/\r\n/g, '\n');
+  function parseDataCSV(csv) {
+    csv = csv.replace(/\r\n/g, '\n');
     var lines = csv.trim().split('\n');
     if (lines.length < 2) return [];
     var hdrs = csvRow(lines[0]).map(function(h) { return h.trim(); });
-    var snIdx = -1, specIdx = -1, defectIdx = -1, modelIdx = -1;
-    for (var i = 0; i < hdrs.length; i++) {
-      var h = hdrs[i];
-      if (h === 'S/N') snIdx = i;
-      else if (h === 'Spec') specIdx = i;
-      else if (h === 'ตำหนิ') defectIdx = i;
-      else if (h === 'อ้างอิง') modelIdx = i;
-    }
+    var modelIdx = hdrs.indexOf('Model');
+    var snIdx = hdrs.indexOf('S/N');
+    var cpuIdx = hdrs.indexOf('CPU');
+    var ramIdx = hdrs.indexOf('Ram');
+    var storageIdx = hdrs.indexOf('Storage');
+    var defectIdx = hdrs.indexOf('Defect');
     if (snIdx < 0) return [];
     var data = [];
     for (var i = 1; i < lines.length; i++) {
@@ -91,20 +87,16 @@
       var vals = csvRow(lines[i]);
       var sn = (vals[snIdx] || '').trim();
       if (!sn) continue;
-      var spec = specIdx >= 0 ? (vals[specIdx] || '').trim() : '';
-      var sp = spec.split(',');
-      var defect = defectIdx >= 0 ? (vals[defectIdx] || '').trim() : '';
-      var model = modelIdx >= 0 ? (vals[modelIdx] || '').trim() : sheetName;
       data.push({
         'Serial Number': sn,
-        'CPU': (sp[0] || '').trim(),
-        'Ram': (sp[1] || '').trim(),
-        'Storage': (sp[2] || '').trim(),
+        'CPU': cpuIdx >= 0 ? (vals[cpuIdx] || '').trim() : '',
+        'Ram': ramIdx >= 0 ? (vals[ramIdx] || '').trim() : '',
+        'Storage': storageIdx >= 0 ? (vals[storageIdx] || '').trim() : '',
         'GPU': '',
-        'Model': model,
-        'ตำหนิ': defect,
+        'Model': modelIdx >= 0 ? (vals[modelIdx] || '').trim() : '',
+        'ตำหนิ': defectIdx >= 0 ? (vals[defectIdx] || '').trim() : '',
         'LAN MAC Address': '',
-        '_sheetName': model
+        '_sheetName': modelIdx >= 0 ? (vals[modelIdx] || '').trim() : ''
       });
     }
     return data;
@@ -150,44 +142,20 @@
     stockTableBody.innerHTML = html.join('');
   }
 
-  function updateProgress(done, total) {
-    var pct = Math.round((done / total) * 100);
-    loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลด... ' + done + '/' + total + ' sheets</p><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
-  }
-
   async function init() {
     try {
       loading.style.display = '';
       stockTableWrapper.style.display = 'none';
       loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดข้อมูล...</p>';
 
-      var manifestResp = await fetch('/sheets.json?_=' + Date.now());
-      var sheetIds = await manifestResp.json();
+      var resp = await fetch('/data.csv?_=' + Date.now());
+      if (!resp.ok) throw new Error('data.csv not found - restart server');
+      var csv = await resp.text();
+      allData = parseDataCSV(csv);
 
-      if (!sheetIds || sheetIds.length === 0) {
+      if (allData.length === 0) {
         loading.innerHTML = '<p style="color:#f59e0b">ไม่พบข้อมูล</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">รีสตาร์ท server เพื่อดึงข้อมูลใหม่</p>';
         return;
-      }
-
-      var total = sheetIds.length;
-      allData = [];
-      updateProgress(0, total);
-
-      var batchSize = 30;
-      for (var i = 0; i < total; i += batchSize) {
-        var batch = sheetIds.slice(i, i + batchSize);
-        var results = await Promise.all(batch.map(function(gid) {
-          return fetch('/sheet/' + gid).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; });
-        }));
-        results.forEach(function(csv, idx) {
-          if (!csv || csv.length < 10) return;
-          var rows = parseCSV(csv, sheetIds[i + idx]);
-          for (var j = 0; j < rows.length; j++) {
-            rows[j]._sheetName = rows[j]['Model'] || 'Unknown';
-          }
-          allData = allData.concat(rows);
-        });
-        updateProgress(Math.min(i + batchSize, total), total);
       }
 
       var sheetNames = [];
