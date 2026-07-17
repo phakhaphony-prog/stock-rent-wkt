@@ -71,39 +71,6 @@
     return values;
   }
 
-  function parseDataCSV(csv) {
-    csv = csv.replace(/\r\n/g, '\n');
-    var lines = csv.trim().split('\n');
-    if (lines.length < 2) return [];
-    var hdrs = csvRow(lines[0]).map(function(h) { return h.trim(); });
-    var modelIdx = hdrs.indexOf('Model');
-    var snIdx = hdrs.indexOf('S/N');
-    var cpuIdx = hdrs.indexOf('CPU');
-    var ramIdx = hdrs.indexOf('Ram');
-    var storageIdx = hdrs.indexOf('Storage');
-    var defectIdx = hdrs.indexOf('Defect');
-    if (snIdx < 0) return [];
-    var data = [];
-    for (var i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      var vals = csvRow(lines[i]);
-      var sn = (vals[snIdx] || '').trim();
-      if (!sn) continue;
-      data.push({
-        'Serial Number': sn,
-        'CPU': cpuIdx >= 0 ? (vals[cpuIdx] || '').trim() : '',
-        'Ram': ramIdx >= 0 ? (vals[ramIdx] || '').trim() : '',
-        'Storage': storageIdx >= 0 ? (vals[storageIdx] || '').trim() : '',
-        'GPU': '',
-        'Model': modelIdx >= 0 ? (vals[modelIdx] || '').trim() : '',
-        'ตำหนิ': defectIdx >= 0 ? (vals[defectIdx] || '').trim() : '',
-        'LAN MAC Address': '',
-        '_sheetName': modelIdx >= 0 ? (vals[modelIdx] || '').trim() : ''
-      });
-    }
-    return data;
-  }
-
   function parseSheetCSV(csv, sheetName) {
     csv = csv.replace(/\r\n/g, '\n');
     var lines = csv.trim().split('\n');
@@ -188,65 +155,45 @@
     stockTableBody.innerHTML = html.join('');
   }
 
-  async function loadFromLocalCSV() {
-    var resp = await fetch('/data.csv?_=' + Date.now());
-    if (!resp.ok) throw new Error('not found');
-    var csv = await resp.text();
-    return parseDataCSV(csv);
-  }
-
-  async function loadFromGoogleSheets() {
-    var manifestResp = await fetch(SHEET_NAMES_URL + '?_=' + Date.now());
-    var html = await manifestResp.text();
-    var regex = /items\.push\(\{name:\s*"([^"]+)"[^}]*gid:\s*"([^"]+)"/g;
-    var match;
-    var sheets = [];
-    while ((match = regex.exec(html)) !== null) {
-      if (match[1] !== 'Total Product' && match[1] !== 'All Stock') {
-        sheets.push({ name: match[1], gid: match[2] });
-      }
-    }
-    if (sheets.length === 0) return [];
-
-    var total = sheets.length;
-    var data = [];
-    var batchSize = 20;
-    for (var i = 0; i < total; i += batchSize) {
-      var batch = sheets.slice(i, i + batchSize);
-      var results = await Promise.all(batch.map(function(s) {
-        var url = BASE_SHEET_URL + '/pub?output=csv&gid=' + s.gid + '&_=' + Date.now();
-        return fetch(url).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; });
-      }));
-      results.forEach(function(csv, idx) {
-        if (!csv || csv.length < 10) return;
-        var rows = parseSheetCSV(csv, batch[idx].name);
-        data = data.concat(rows);
-      });
-      updateProgress(Math.min(i + batchSize, total), total);
-    }
-    return data;
-  }
-
   async function init() {
     try {
       loading.style.display = '';
       stockTableWrapper.style.display = 'none';
-      loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดข้อมูล...</p>';
+      loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดรายชื่อ sheets...</p>';
 
-      try {
-        allData = await loadFromLocalCSV();
-      } catch (e) {
-        allData = [];
+      var manifestResp = await fetch(SHEET_NAMES_URL + '?_=' + Date.now());
+      var html = await manifestResp.text();
+      var regex = /items\.push\(\{name:\s*"([^"]+)"[^}]*gid:\s*"([^"]+)"/g;
+      var match;
+      var sheets = [];
+      while ((match = regex.exec(html)) !== null) {
+        if (match[1] !== 'Total Product' && match[1] !== 'All Stock') {
+          sheets.push({ name: match[1], gid: match[2] });
+        }
       }
 
-      if (allData.length === 0) {
-        loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลดจาก Google Sheets...</p>';
-        allData = await loadFromGoogleSheets();
-      }
-
-      if (allData.length === 0) {
-        loading.innerHTML = '<p style="color:#f59e0b">ไม่พบข้อมูล</p>';
+      if (sheets.length === 0) {
+        loading.innerHTML = '<p style="color:#f59e0b">ไม่พบ sheets</p>';
         return;
+      }
+
+      var total = sheets.length;
+      allData = [];
+      updateProgress(0, total);
+
+      var batchSize = 20;
+      for (var i = 0; i < total; i += batchSize) {
+        var batch = sheets.slice(i, i + batchSize);
+        var results = await Promise.all(batch.map(function(s) {
+          var url = BASE_SHEET_URL + '/pub?output=csv&gid=' + s.gid + '&_=' + Date.now();
+          return fetch(url).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; });
+        }));
+        results.forEach(function(csv, idx) {
+          if (!csv || csv.length < 10) return;
+          var rows = parseSheetCSV(csv, batch[idx].name);
+          allData = allData.concat(rows);
+        });
+        updateProgress(Math.min(i + batchSize, total), total);
       }
 
       var sheetNames = [];
@@ -261,7 +208,7 @@
       renderTable();
     } catch (err) {
       console.error('Init error:', err);
-      loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p>';
+      loading.innerHTML = '<p style="color:#ef4444">ไม่สามารถโหลดข้อมูลได้</p><p style="color:#a1a1aa;font-size:0.9rem;margin-top:12px">' + err.message + '</p>';
     }
   }
 
