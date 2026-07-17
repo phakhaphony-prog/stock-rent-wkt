@@ -114,6 +114,10 @@ $content = $header + "`n" + ($allRows -join "`n")
 Write-Host "  Saved: $($allRows.Count) rows to data.csv"
 Write-Host ""
 
+Write-Host "[3/3] Building index.html..."
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "build.ps1")
+
+Write-Host ""
 Write-Host "Starting web server..."
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:8080/")

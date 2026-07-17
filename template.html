@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Rent WKT - PC Inventory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #09090b; color: #fafafa; min-height: 100vh; }
+    .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 16px 0; background: rgba(9,9,11,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid #27272a; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    .nav-container { display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 1.2rem; font-weight: 700; color: #fafafa; text-decoration: none; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: #a1a1aa; text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+    .nav-links a:hover { color: #fafafa; }
+    .mobile-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; }
+    .mobile-toggle span { display: block; width: 20px; height: 2px; background: #fafafa; margin: 4px 0; }
+    .hero { padding: 140px 0 80px; text-align: center; position: relative; overflow: hidden; }
+    .hero-glow { position: absolute; top: -50%; left: 50%; transform: translateX(-50%); width: 600px; height: 600px; background: radial-gradient(circle, rgba(99,102,241,0.15), transparent 70%); pointer-events: none; }
+    .badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: rgba(99,102,241,0.1); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); margin-bottom: 16px; }
+    .hero h1 { font-size: 2.5rem; font-weight: 800; line-height: 1.2; margin-bottom: 16px; }
+    .gradient-text { background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero-desc { color: #a1a1aa; font-size: 1.1rem; margin-bottom: 32px; }
+    .btn { display: inline-flex; align-items: center; padding: 12px 24px; border-radius: 12px; font-weight: 600; font-size: 0.95rem; cursor: pointer; border: none; font-family: inherit; text-decoration: none; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(99,102,241,0.5); }
+    .stock-section { padding: 60px 0 100px; }
+    .section-header { text-align: center; margin-bottom: 40px; }
+    .section-header h2 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
+    .section-desc { color: #a1a1aa; }
+    .controls { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .search-box { flex: 1; min-width: 200px; }
+    .search-box input { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid #27272a; background: #18181b; color: #fafafa; font-size: 0.95rem; font-family: inherit; outline: none; }
+    .search-box input:focus { border-color: #6366f1; }
+    .filter-select { padding: 12px 16px; border-radius: 12px; border: 1px solid #27272a; background: #18181b; color: #fafafa; font-size: 0.95rem; font-family: inherit; outline: none; cursor: pointer; min-width: 200px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a1a1aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+    .loading { text-align: center; padding: 80px 0; }
+    .spinner { width: 56px; height: 56px; border: 4px solid #27272a; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 24px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading .pct { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #6366f1, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+    .loading .sub { color: #a1a1aa; font-size: 1rem; margin-bottom: 20px; }
+    .loading .detail { color: #52525b; font-size: 0.85rem; margin-top: 12px; }
+    .progress-bar { width: 100%; max-width: 400px; height: 8px; background: #27272a; border-radius: 4px; margin: 0 auto; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899); border-radius: 4px; transition: width 0.3s ease; }
+    .stock-table-wrapper { overflow-x: auto; border: 1px solid #27272a; border-radius: 16px; background: #18181b; }
+    .stock-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .stock-table th { padding: 14px 16px; text-align: left; font-weight: 600; color: #a1a1aa; background: #0f0f11; border-bottom: 1px solid #27272a; white-space: nowrap; }
+    .stock-table td { padding: 12px 16px; border-bottom: 1px solid #1f1f23; }
+    .stock-table tr:hover td { background: #1f1f23; }
+    .serial-badge { display: inline-block; padding: 4px 10px; border-radius: 8px; background: rgba(99,102,241,0.1); color: #818cf8; font-size: 0.85rem; font-weight: 500; }
+    .ram-badge { display: inline-block; padding: 4px 10px; border-radius: 8px; background: rgba(34,197,94,0.1); color: #22c55e; font-size: 0.85rem; font-weight: 500; }
+    .defect-badge { display: inline-block; padding: 4px 10px; border-radius: 8px; background: rgba(239,68,68,0.1); color: #ef4444; font-size: 0.85rem; font-weight: 500; }
+    .no-results { text-align: center; padding: 60px 0; color: #a1a1aa; }
+    .about { padding: 80px 0; }
+    .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+    .about-content h2 { font-size: 1.8rem; font-weight: 700; margin-bottom: 12px; }
+    .about-content p { color: #a1a1aa; margin-bottom: 20px; line-height: 1.6; }
+    .about-list { list-style: none; }
+    .about-list li { padding: 6px 0; color: #a1a1aa; }
+    .about-visual { display: flex; flex-direction: column; gap: 16px; }
+    .visual-card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; }
+    .visual-bar { height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 4px; margin-bottom: 8px; }
+    .visual-card span { font-size: 0.85rem; color: #a1a1aa; }
+    .footer { padding: 24px 0; border-top: 1px solid #27272a; text-align: center; color: #52525b; font-size: 0.85rem; }
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 1.8rem; }
+      .about-grid { grid-template-columns: 1fr; }
+      .mobile-toggle { display: block; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar" id="navbar">
+    <div class="container nav-container">
+      <a href="#" class="logo">Stock Rent WKT</a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#stock">Stock</a></li>
+        <li><a href="#about">About</a></li>
+      </ul>
+      <a href="#stock" class="btn btn-primary" style="padding:8px 16px;font-size:0.85rem">View Stock</a>
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <span class="badge">PC Stock Management</span>
+        <h1>Manage your <span class="gradient-text">PC inventory</span></h1>
+        <p class="hero-desc">Real-time stock tracking for all PC models. Data synced from Google Sheets.</p>
+        <div class="hero-actions">
+          <a href="#stock" class="btn btn-primary" style="padding:14px 28px;font-size:1rem">View Stock</a>
+        </div>
+      </div>
+    </div>
+    <div class="hero-glow"></div>
+  </header>
+
+  <section class="stock-section" id="stock">
+    <div class="container">
+      <div class="section-header">
+        <span class="badge">Inventory</span>
+        <h2>PC Stock List</h2>
+        <p class="section-desc">ข้อมูลอัปเดตอัตโนมัติจาก Google Sheets</p>
+      </div>
+
+      <div class="controls">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search by serial, model, CPU...">
+        </div>
+        <div class="filter-select-wrap">
+          <select class="filter-select" id="filterSelect">
+            <option value="all">All Models</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="pct" id="loadPct">0%</div>
+        <div class="sub" id="loadSub">กำลังโหลดข้อมูล...</div>
+        <div class="progress-bar"><div class="progress-fill" id="loadBar" style="width:0%"></div></div>
+        <div class="detail" id="loadDetail"></div>
+      </div>
+
+      <div class="stock-table-wrapper" id="stockTableWrapper" style="display:none">
+        <table class="stock-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Model</th>
+              <th>Serial Number</th>
+              <th>CPU</th>
+              <th>RAM</th>
+              <th>GPU</th>
+              <th>Storage</th>
+              <th>ตำหนิ</th>
+            </tr>
+          </thead>
+          <tbody id="stockTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="no-results" id="noResults" style="display:none">
+        <p>ไม่พบข้อมูลที่ค้นหา</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="about" id="about">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-content">
+          <span class="badge">About</span>
+          <h2>Stock Rent WKT</h2>
+          <p>ระบบจัดการข้อมูลสินค้าในสต็อก สำหรับธุรกิจให้เช่าคอมพิวเตอร์ ข้อมูลอัปเดตอัตโนมัติจาก Google Sheets</p>
+          <ul class="about-list">
+            <li>&#10003; ข้อมูล Realtime จาก Google Sheets</li>
+            <li>&#10003; ค้นหาและกรองข้อมูลได้</li>
+            <li>&#10003; แสดงรายละเอียดสเปคเครื่อง</li>
+            <li>&#10003; ใช้งานง่ายบนมือถือ</li>
+          </ul>
+        </div>
+        <div class="about-visual">
+          <div class="visual-card">
+            <div class="visual-bar" style="width: 85%"></div>
+            <span>Dell OptiPlex 3000</span>
+          </div>
+          <div class="visual-card">
+            <div class="visual-bar" style="width: 15%"></div>
+            <span>Dell OptiPlex 5000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 Stock Rent WKT. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+  (function() {
+    var allData = [];
+    var currentFilter = 'all';
+    var loadPct = document.getElementById('loadPct');
+    var loadSub = document.getElementById('loadSub');
+    var loadBar = document.getElementById('loadBar');
+    var loadDetail = document.getElementById('loadDetail');
+
+    document.getElementById('mobileToggle').onclick = function() {
+      var nl = document.getElementById('navLinks');
+      nl.style.display = nl.style.display === 'flex' ? 'none' : 'flex';
+      if (nl.style.display === 'flex') { nl.style.flexDirection='column';nl.style.position='absolute';nl.style.top='100%';nl.style.left='0';nl.style.right='0';nl.style.background='rgba(9,9,11,0.95)';nl.style.padding='24px';nl.style.gap='16px'; }
+    };
+    document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+      a.onclick = function(e) { e.preventDefault(); var t = document.querySelector(a.getAttribute('href')); if (t) t.scrollIntoView({behavior:'smooth'}); };
+    });
+    document.getElementById('searchInput').oninput = renderTable;
+
+    function csvRow(line) {
+      var v=[],cur='',inQ=false;
+      for(var c=0;c<line.length;c++){var ch=line[c];if(inQ){if(ch==='"'){if(c+1<line.length&&line[c+1]==='"'){cur+='"';c++;}else inQ=false;}else cur+=ch;}else{if(ch==='"')inQ=true;else if(ch===','){v.push(cur);cur='';}else cur+=ch;}}
+      v.push(cur); return v;
+    }
+
+    function parseCSV(csv) {
+      csv = csv.replace(/\r\n/g, '\n');
+      var lines = csv.trim().split('\n');
+      if (lines.length < 2) return [];
+      var h = csvRow(lines[0]).map(function(x){return x.trim();});
+      var mI=-1,sI=-1,rI=-1,stI=-1,dI=-1;
+      for(var i=0;i<h.length;i++){
+        if(h[i]==='Model')mI=i;else if(h[i]==='S/N')sI=i;else if(h[i]==='CPU')rI=i;
+        else if(h[i]==='Ram')rI=i;else if(h[i]==='Storage')stI=i;else if(h[i]==='Defect')dI=i;
+      }
+      if(sI<0)return[];
+      rI=h.indexOf('CPU');var raI=h.indexOf('Ram');stI=h.indexOf('Storage');
+      var data=[];
+      for(var i=1;i<lines.length;i++){
+        if(!lines[i].trim())continue;
+        var v=csvRow(lines[i]);
+        var sn=(v[sI]||'').trim();if(!sn)continue;
+        data.push({
+          'Serial Number':sn,
+          'CPU':rI>=0?(v[rI]||'').trim():'',
+          'Ram':raI>=0?(v[raI]||'').trim():'',
+          'Storage':stI>=0?(v[stI]||'').trim():'',
+          'GPU':'',
+          'Model':mI>=0?(v[mI]||'').trim():'',
+          'ตำหนิ':dI>=0?(v[dI]||'').trim():'',
+          '_sheetName':mI>=0?(v[mI]||'').trim():''
+        });
+      }
+      return data;
+    }
+
+    function buildDropdown(names) {
+      var cm={};
+      allData.forEach(function(r){var n=r._sheetName||'?';cm[n]=(cm[n]||0)+1;});
+      var fs=document.getElementById('filterSelect');
+      fs.innerHTML='<option value="all">All Models ('+allData.length+')</option>';
+      names.sort().forEach(function(n){
+        var o=document.createElement('option');o.value=n;o.textContent=n+' ('+(cm[n]||0)+')';fs.appendChild(o);
+      });
+      fs.onchange=function(){currentFilter=fs.value;renderTable();};
+    }
+
+    function renderTable() {
+      var s=document.getElementById('searchInput').value.toLowerCase();
+      var f=allData;
+      if(currentFilter!=='all')f=f.filter(function(d){return d._sheetName===currentFilter;});
+      if(s)f=f.filter(function(d){return d['Serial Number']&&Object.values(d).some(function(v){return String(v).toLowerCase().indexOf(s)!==-1;});});
+      var tw=document.getElementById('stockTableWrapper'),nr=document.getElementById('noResults');
+      if(f.length===0){tw.style.display='none';nr.style.display='';return;}
+      nr.style.display='none';tw.style.display='';
+      var h=[];
+      for(var i=0;i<f.length;i++){
+        var r=f[i],df=r['ตำหนิ']||'',hs=r['CPU']||r['Ram'];
+        h.push('<tr><td>'+(i+1)+'</td><td><span class="serial-badge">'+(r['Model']||'-')+'</span></td><td><span class="serial-badge">'+(r['Serial Number']||'-')+'</span></td><td>'+(r['CPU']||'-')+'</td><td><span class="ram-badge">'+(r['Ram']||'-')+'</span></td><td>'+(r['GPU']||'-')+'</td><td>'+(r['Storage']||'-')+'</td><td>'+(df?'<span class="defect-badge">'+df+'</span>':(hs?'<span style="color:#22c55e">OK</span>'))+'</td></tr>');
+      }
+      document.getElementById('stockTableBody').innerHTML=h.join('');
+    }
+
+    function setProgress(pct,sub,detail) {
+      loadPct.textContent=pct+'%';loadSub.textContent=sub;loadBar.style.width=pct+'%';if(detail)loadDetail.textContent=detail;
+    }
+
+    var RAW_CSV = '';
+    function init() {
+      setProgress(20,'กำลังแปลงข้อมูล...','');
+      allData = parseCSV(RAW_CSV);
+      if (allData.length === 0) { loadPct.textContent='!'; loadSub.textContent='No data'; return; }
+      var sn=[],se={};
+      allData.forEach(function(r){if(r._sheetName&&!se[r._sheetName]){se[r._sheetName]=true;sn.push(r._sheetName);}});
+      buildDropdown(sn);
+      setProgress(100,'เสร็จสิ้น! '+allData.length+' รายการ','');
+      document.getElementById('loading').style.display='none';
+      document.getElementById('stockTableWrapper').style.display='';
+      renderTable();
+    }
+    init();
+  })();
+  </script>
+</body>
+</html>
