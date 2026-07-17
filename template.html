@@ -272,18 +272,32 @@
       loadPct.textContent=pct+'%';loadSub.textContent=sub;loadBar.style.width=pct+'%';if(detail)loadDetail.textContent=detail;
     }
 
-    var RAW_CSV = '';
+    var RAW_CSV_B64 = '';
     function init() {
-      setProgress(20,'กำลังแปลงข้อมูล...','');
-      allData = parseCSV(RAW_CSV);
-      if (allData.length === 0) { loadPct.textContent='!'; loadSub.textContent='No data'; return; }
+      try {
+        setProgress(10,'กำลังถอดรหัสข้อมูล...','');
+        var raw;
+        if (RAW_CSV_B64) {
+          raw = decodeURIComponent(escape(atob(RAW_CSV_B64)));
+        } else {
+          raw = '';
+        }
+        setProgress(30,'กำลังแปลงข้อมูล...','');
+        allData = parseCSV(raw);
+        if (allData.length === 0) { loadPct.textContent='!'; loadSub.textContent='No data found'; return; }
       var sn=[],se={};
       allData.forEach(function(r){if(r._sheetName&&!se[r._sheetName]){se[r._sheetName]=true;sn.push(r._sheetName);}});
-      buildDropdown(sn);
-      setProgress(100,'เสร็จสิ้น! '+allData.length+' รายการ','');
-      document.getElementById('loading').style.display='none';
-      document.getElementById('stockTableWrapper').style.display='';
-      renderTable();
+        buildDropdown(sn);
+        setProgress(100,'เสร็จสิ้น! '+allData.length+' รายการ','');
+        document.getElementById('loading').style.display='none';
+        document.getElementById('stockTableWrapper').style.display='';
+        renderTable();
+      } catch(e) {
+        loadPct.textContent='!';
+        loadSub.textContent='Error: ' + e.message;
+        loadDetail.textContent = e.stack || '';
+        console.error('Init error:', e);
+      }
     }
     init();
   })();
