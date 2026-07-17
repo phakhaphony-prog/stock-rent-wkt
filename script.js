@@ -124,7 +124,12 @@
 
   function updateProgress(done, total) {
     var pct = Math.round((done / total) * 100);
-    loading.innerHTML = '<div class="spinner"></div><p>กำลังโหลด... ' + done + '/' + total + ' sheets</p><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
+    loading.innerHTML =
+      '<div class="spinner"></div>' +
+      '<p style="font-size:1.2rem;font-weight:700;margin-bottom:4px">' + pct + '%</p>' +
+      '<p style="color:#a1a1aa;margin-bottom:12px">กำลังโหลดข้อมูลจาก Google Sheets...</p>' +
+      '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<p style="color:#71717a;margin-top:8px;font-size:0.85rem">' + done + ' / ' + total + ' sheets</p>';
   }
 
   function renderTable() {
